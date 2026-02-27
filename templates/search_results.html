@@ -6,6 +6,20 @@
 
 
 {% block content %}  
+    <style>
+        #container {
+            width: 100%;
+            height: 600px;  /* 电脑上600px */
+        }
+        
+        @media (max-width: 768px) {
+            #container {
+                height: 300px;  /* 手机上300px */
+            }
+        }
+    </style>
+
+
     <h2>
         搜索客户
         {% if keyword %}
@@ -56,7 +70,7 @@
         </tbody>
     </table>
 
-        <div id="container" style="width: 100%; height: 600px;"></div>
+        <div id="container"></div>
     <script src="https://webapi.amap.com/loader.js"></script>
     <script type="text/javascript">
         window._AMapSecurityConfig = {
@@ -105,11 +119,21 @@
                             map: map
                         });
 
-                        var infoWindow = new AMap.InfoWindow({
-                            content: "<div><strong>" + item.customer.name + "</strong><br/>" +
-                                    "电话: " + (item.customer.phone || '无') + "<br/>" +
-                                    "地址: " + item.customer.address + "</div>"
-                        });
+                            var infoContent = `
+                                <div style="padding: 12px; min-width: 180px;">
+                                    <h4 style="margin:0 0 5px 0; color:#1890ff;">${item.customer.name}</h4>
+                                    <p style="margin:5px 0; color:#666; font-size:13px;">电话: ${item.customer.phone || '无'}</p>
+                                    <p style="margin:5px 0; color:#666; font-size:13px;">${item.customer.address}</p>
+                                    <button onclick="navigateToMap(${item.customer.longitude}, ${item.customer.latitude}, '${item.customer.name}')" 
+                                            style="width:100%; margin-top:8px; padding:8px; background:#1890ff; color:white; border:none; border-radius:4px; font-size:14px; cursor:pointer;">
+                                        🚗 去这里
+                                    </button>
+                                </div>
+                            `;
+                            var infoWindow = new AMap.InfoWindow({
+                                content: infoContent,
+                                offset: new AMap.Pixel(0, -30)
+                            });
 
                         marker.on('click', function(e) {
                             infoWindow.open(map, e.target.getPosition());
@@ -121,10 +145,34 @@
                 console.error(e);
             });
         })();
+
+    // ========== 导航功能：自动识别设备 ==========
+    function navigateToMap(lng, lat, name) {
+        // 提示弹窗
+        alert('正在打开地图，如被浏览器拦截，请点击地址栏允许弹窗...');
+
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        const encodedName = encodeURIComponent(name);
+        
+        if (isMobile) {
+            // 手机端：系统选择器
+            window.location.href = `geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`;
+            setTimeout(() => {
+                window.open(`https://uri.amap.com/marker?position=${lng},${lat}&name=${encodedName}`, '_blank');
+            }, 1000);
+        } else {
+            // 电脑端：弹个简单选择
+            const choice = confirm(`用哪个地图查看 ${name}？\n确定=高德地图，取消=百度地图`);
+            if (choice) {
+                window.open(`https://uri.amap.com/marker?position=${lng},${lat}&name=${encodedName}`, '_blank');
+            } else {
+                window.open(`https://map.baidu.com/?latlng=${lat},${lng}&title=${encodedName}`, '_blank');
+            }
+        }
+    }
+
+
     </script>
-
-
-
 
 
     {% else %}

@@ -5,7 +5,19 @@
 {% endblock %}
 
 {% block content %}
-<div id="container" style=" width: 100%; height: 800px;"></div>
+<style>
+    #container {
+        width: 100%;
+        height: 800px;  /* 电脑样式 */
+    }
+    
+    @media (max-width: 768px) {
+        #container {
+            height: 350px;  /* 手机样式 */
+        }
+    }
+</style>
+<div id="container"></div>
 <script src="https://webapi.amap.com/loader.js"></script>
 <script type="text/javascript">
     window._AMapSecurityConfig = {
@@ -14,7 +26,7 @@
     AMapLoader.load({
         key: "{{ web_key }}", //申请好的 Web 端开发 Key，首次调用 load 时必填
         version: "2.0", //指定要加载的 JS API 的版本，缺省时默认为 1.4.15
-        plugins: ["AMap.Scale","AMap.Marker"], //需要使用的的插件列表，如比例尺'AMap.Scale'，支持添加多个如：['AMap.Scale','...','...']
+        plugins: ["AMap.Scale","AMap.Marker","AMap.InfoWindow"], //需要使用的的插件列表，如比例尺'AMap.Scale'，支持添加多个如：['AMap.Scale','...','...']
         AMapUI: {
         //是否加载 AMapUI，缺省不加载
             version: "1.1", //AMapUI 版本
@@ -33,17 +45,64 @@
             .then(customers => {
                 customers.forEach(customer => { 
                     if (customer.latitude && customer.longitude) {
-                        new AMap.Marker({
+                        var marker = new AMap.Marker({
                             position: new AMap.LngLat(customer.longitude, customer.latitude),
                             title: `${customer.name} - ${customer.address}`
-                        }).setMap(map);
-                    }})
+                        });
+                        marker.setMap(map);
+                        marker.on('click',function() {
+                                // 创建信息窗口内容
+                                var infoContent = `
+                                    <div style="padding: 12px; min-width: 180px;">
+                                        <h4 style="margin:0 0 5px 0; color:#1890ff;">${customer.name}</h4>
+                                        <p style="margin:5px 0; color:#666; font-size:13px;">${customer.address}</p >
+                                        <button onclick="navigateToMap(${customer.longitude}, ${customer.latitude}, '${customer.name}')" 
+                                                style="width:100%; margin-top:8px; padding:8px; background:#1890ff; color:white; border:none; border-radius:4px; font-size:14px; cursor:pointer;">
+                                            🚗 去这里
+                                        </button>
+                                    </div>
+                                `;
+                                var infoWindow = new AMap.InfoWindow({
+                                    content: infoContent,
+                                    offset: new AMap.Pixel(0, -30)
+                                });
+                                infoWindow.open(map, [customer.longitude, customer.latitude]);
+                            });
+                        }
+                    });
                 })
-    })
+                .catch((e) => {
+                    console.error(e); //加载错误提示
+                });
+        })
 
-    .catch((e) => {
-        console.error(e); //加载错误提示
-    });
+    // ========== 导航功能：自动识别设备 ==========
+    function navigateToMap(lng, lat, name) {
+        // 提示弹窗
+        alert('正在打开地图，如被浏览器拦截，请点击地址栏允许弹窗...');
+
+        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        const encodedName = encodeURIComponent(name);
+        
+        if (isMobile) {
+            // 手机端：系统选择器
+            window.location.href = `geo:${lat},${lng}?q=${lat},${lng}(${encodedName})`;
+            setTimeout(() => {
+                window.open(`https://uri.amap.com/marker?position=${lng},${lat}&name=${encodedName}`, '_blank');
+            }, 1000);
+        } else {
+            // 电脑端：弹个简单选择
+            const choice = confirm(`用哪个地图查看 ${name}？\n确定=高德地图，取消=百度地图`);
+            if (choice) {
+                window.open(`https://uri.amap.com/marker?position=${lng},${lat}&name=${encodedName}`, '_blank');
+            } else {
+                window.open(`https://map.baidu.com/?latlng=${lat},${lng}&title=${encodedName}`, '_blank');
+            }
+        }
+    }
+
+
+
 </script>
     
     <a href="{{ url_for('map.list_customers') }}" class="btn btn-primary">管理客户列表</a>
