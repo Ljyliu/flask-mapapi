@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}添加新客户-客户地图系统{% endblock %}
+
+{% block content %}
+    <h2>添加新客户</h2>
+    <form action="{{ url_for('map.add_customers') }}" method="POST">
+
+        <div>
+            <label for="name">姓名:</label>
+            <input type="text" name="name" id="name" class="form-control" required>
+
+        <div>
+            <label for="phone">电话:</label>
+            <input type="tel" name="phone" id="phone" class="form-control" pattern="^1[3-9]\d{9}$" title="请输入11位有效大陆手机号">
+        </div>
+
+        <div> 
+            <label for="address">地址:</label>
+            <textarea type="text" name="address" id="address" class="form-control" required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">添加</button>
+        <a href="{{ url_for('map.list_customers') }}" class="btn btn-outline-secondary">取消</a>
+    </form>
+    
+{% endblock %}

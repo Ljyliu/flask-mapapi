@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}更新客户信息-客户地图系统{% endblock %}
+
+{% block content %} 
+    <h2>更新客户信息</h2>
+    <form action="{{ url_for('map.update',customer_id=customer.id) }}" method="POST">
+
+        <div class="mb-3">
+            <label for="name" class="form-label">姓名:</label>
+            <input type="text" name="name" id="name" class="form-control" value='{{ customer.name }}' required>
+        </div>
+
+        <div class="mb-3">
+            <label for="phone">电话:</label>
+            <input type="tel" name="phone" id="phone" class="form-control" pattern="^1[3-9]\d{9}$" title="请输入11位有效大陆手机号" value="{{customer.phone or ''}}">
+        </div>
+
+        <div class="mb-3"> 
+            <label for="address">地址:</label>
+            <textarea type='text' name="address" id="address" class="form-control"  row="3" required>{{customer.address}}</textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">修改</button>
+        <a href="{{ url_for('map.list_customers') }}" class="btn btn-outline-secondary">取消</a>
+    </form>
+    
+
+
+{% endblock %}

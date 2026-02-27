@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}
+    首页-客户地图系统
+{% endblock %}
+
+{% block content %}
+<div id="container" style=" width: 100%; height: 800px;"></div>
+<script src="https://webapi.amap.com/loader.js"></script>
+<script type="text/javascript">
+    window._AMapSecurityConfig = {
+        securityJsCode: "{{ s_code }}",
+    };
+    AMapLoader.load({
+        key: "{{ web_key }}", //申请好的 Web 端开发 Key，首次调用 load 时必填
+        version: "2.0", //指定要加载的 JS API 的版本，缺省时默认为 1.4.15
+        plugins: ["AMap.Scale","AMap.Marker"], //需要使用的的插件列表，如比例尺'AMap.Scale'，支持添加多个如：['AMap.Scale','...','...']
+        AMapUI: {
+        //是否加载 AMapUI，缺省不加载
+            version: "1.1", //AMapUI 版本
+            plugins: ["overlay/SimpleMarker"], //需要加载的 AMapUI ui 插件
+        },
+        Loca: {
+        //是否加载 Loca， 缺省不加载
+            version: "2.0", //Loca 版本
+        },
+    })
+    .then((AMap) => {
+        var map = new AMap.Map("container"); //"container"为 <div> 容器的 id
+        map.addControl(new AMap.Scale()); //添加比例尺组件到地图实例上
+        fetch("{{ url_for('map.customers_data') }}")
+            .then(response => response.json())
+            .then(customers => {
+                customers.forEach(customer => { 
+                    if (customer.latitude && customer.longitude) {
+                        new AMap.Marker({
+                            position: new AMap.LngLat(customer.longitude, customer.latitude),
+                            title: `${customer.name} - ${customer.address}`
+                        }).setMap(map);
+                    }})
+                })
+    })
+
+    .catch((e) => {
+        console.error(e); //加载错误提示
+    });
+</script>
+    
+    <a href="{{ url_for('map.list_customers') }}" class="btn btn-primary">管理客户列表</a>
+{% endblock %}

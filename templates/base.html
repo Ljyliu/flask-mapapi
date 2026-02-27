@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}客户地图系统{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+</head>
+
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('map.index') }}">客户地图系统</a>
+                
+            <!-- 右侧用户信息和退出按钮 -->
+            <div class="navbar-nav ms-auto">
+                {% if session['user_id'] %}
+                    <span class="navbar-text me-3">
+                        欢迎, {{ user.username }}!
+                    </span>
+                    <a class="nav-link" href="{{ url_for('auth.logout') }}">退出</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <h1>{% block page_title %}客户分布地图系统{% endblock %}</h1>
+        <hr>
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 定义一个函数，用于在删除客户前显示确认对话框
+        function confirmDelete(customerName) {
+            return confirm(`确定要删除客户 ${customerName} 吗？`);
+        }
+    </script>
+
+    <script>
+        // 强制让所有提示框都能关闭（使用事件委托）
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-close')) {
+                e.target.closest('.alert').remove();
+            }
+        });
+    </script>
+
+</body>
+</html>
