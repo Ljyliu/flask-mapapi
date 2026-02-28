@@ -8,8 +8,52 @@
 
 {% block content %} 
     <h2>客户列表</h2>
-    <a href="{{ url_for('map.add') }}" class="btn btn-success mb-3">+ 添加新客户</a>
-    <a href="{{ url_for('map.index') }}" class="btn btn-outline-danger mb-3">返回首页</a>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+        <div class="btn-group mb-2">
+            <a href="{{ url_for('map.add') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> 添加新客户
+            </a >
+            <!-- 导入按钮（触发折叠面板） -->
+            <button type="button" class="btn btn-info" data-bs-toggle="collapse" data-bs-target="#importCollapse">
+                <i class="fas fa-upload"></i> 导入
+            </button>
+            <!-- 导出下拉菜单 -->
+            <div class="btn-group">
+                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="fas fa-download"></i> 导出
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{{ url_for('map.export_customers', format='csv') }}">CSV 格式</a ></li>
+                    <li><a class="dropdown-item" href="{{ url_for('map.export_customers', format='xls') }}">XLS 格式</a ></li>
+                    <li><a class="dropdown-item" href="{{ url_for('map.export_customers', format='xlsx') }}">XLSX 格式</a ></li>
+                </ul>
+            </div>
+        </div>
+        <div class="mb-2">
+            <a href="{{ url_for('map.index') }}" class="btn btn-outline-danger">
+                <i class="fas fa-home"></i> 返回首页
+            </a >
+        </div>
+    </div>
+
+    <!-- 导入折叠面板 -->
+    <div class="collapse mb-3" id="importCollapse">
+        <div class="card card-body">
+            <h5>批量导入客户</h5>
+            <form id="importForm" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="fileInput" class="form-label">选择 Excel 或 CSV 文件</label>
+                    <input class="form-control" type="file" id="fileInput" name="file" accept=".xls,.xlsx,.csv" required>
+                    <div class="form-text">支持 .xls, .xlsx, .csv，文件需包含标题行（姓名、地址必填）</div>
+                </div>
+                <button type="submit" class="btn btn-primary" id="uploadBtn">
+                    <i class="fas fa-upload"></i> 上传并导入
+                </button>
+            </form>
+            <div id="importResult" class="mt-3" style="display: none;"></div>
+        </div>
+    </div>
+
 
     <div class="mb-3">
     <button id="retryGeocode" class="btn btn-warning">
@@ -135,5 +179,57 @@
             });
         });
     </script>
+
+    <script>
+    // 导入表单提交处理
+    document.getElementById('importForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const uploadBtn = document.getElementById('uploadBtn');
+        const originalText = uploadBtn.innerHTML;
+        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
+        uploadBtn.disabled = true;
+
+        const resultDiv = document.getElementById('importResult');
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '处理中...';
+        resultDiv.className = 'mt-3 alert alert-info';
+
+        try {
+            const response = await fetch('{{ url_for("map.import_customers") }}', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                resultDiv.className = 'mt-3 alert alert-danger';
+                resultDiv.innerHTML = `<strong>导入失败：</strong> ${data.message || '未知错误'}`;
+            } else {
+                let html = `<strong>${data.msg}</strong>`;
+                if (data.data && data.data.errors && data.data.errors.length > 0) {
+                    html += '<br><span class="text-danger">错误详情：</span><br>';
+                    html += data.data.errors.map(err => `&nbsp;${err}`).join('<br>');
+                }
+                resultDiv.className = data.data && data.data.fail > 0 ? 'mt-3 alert alert-warning' : 'mt-3 alert alert-success';
+                resultDiv.innerHTML = html;
+            }
+        } catch (error) {
+            resultDiv.className = 'mt-3 alert alert-danger';
+            resultDiv.innerHTML = `<strong>网络错误：</strong> ${error.message}`;
+        } finally {
+            uploadBtn.innerHTML = originalText;
+            uploadBtn.disabled = false;
+            fileInput.value = ''; // 清空文件选择
+        }
+    });
+    </script>
+
 {% endblock %}
 

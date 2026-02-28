@@ -1,11 +1,11 @@
 from app import db
 from app.models import Customer
 from config import GAODE_WEB_KEY, GAODE_SECURITY_CODE
-from flask import render_template, request, redirect, url_for, jsonify, session
+from flask import render_template, request, redirect, url_for, jsonify, session, Response
 from app.auth import check_login
-from app.utils import validate_phone, validate_customer, safe_str
+from app.utils import validate_phone, validate_customer, safe_str, validate_file
 from flask import Blueprint
-from app.service import validate_duplicate, geocode_customer
+from app.service import validate_duplicate, geocode_customer, read_excel_to_db,output_excel
 
 bp = Blueprint('map', __name__)
 
@@ -221,4 +221,69 @@ def search():
                             count=len(customers),
                             customers_data=customers_data,
                             web_key=GAODE_WEB_KEY,
-                            s_code=GAODE_SECURITY_CODE)    
+                            s_code=GAODE_SECURITY_CODE)
+
+
+@bp.route('/customers/import/', methods=['POST'])
+@check_login
+def import_customers():
+    user_id = session.get('user_id')
+
+    file = request.files.get('file')
+    if not file:
+        return jsonify(
+            {
+                'code': '400',
+                'message': '请选择文件',
+            }
+        ), 400
+    
+    # 验证文件格式
+    is_valid, error_msg = validate_file(file)
+    if not is_valid:
+        return {
+            'code': 1, # 0 表示成功 1 表示失败
+            'msg': error_msg,
+            'data': None
+        }
+
+    # 调用service层的函数处理文件并导入数据
+    result = read_excel_to_db(file, user_id)
+    return jsonify(result)
+
+
+@bp.route('/customers/export/<format>',methods=['GET'])
+@check_login
+def export_customers(format):
+    user_id = session.get('user_id')
+    
+    output = output_excel(format,user_id)
+    if format == 'csv':
+        return Response(
+            output,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment;filename=customers.csv'
+            }
+        )
+    elif format == 'xls':
+        return Response(
+            output,
+            mimetype='application/vnd.ms-excel',
+            headers={
+                'Content-Disposition': f'attachment;filename=customers.xls'
+            }
+        )
+    elif format == 'xlsx':
+        return Response(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment;filename=customers.xlsx'
+            }
+        )
+    else:
+        return jsonify({
+            'code': 400,
+            'message': '不支持的格式'
+        }), 400
