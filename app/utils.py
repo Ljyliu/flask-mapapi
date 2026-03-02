@@ -34,15 +34,6 @@ def validate_phone(phone):
     pattern = r'^1[3-9]\d{9}$'
     return bool(re.match(pattern,phone))
 
-def validate_customer(name,address):
-    '''验证客户信息'''
-    errors = []
-    if not name:
-        errors.append('姓名不能为空！')
-    if not address:
-        errors.append('地址不能为空！')
-    return errors
-
 
 # 生成签名
 def generate_sign(params, security_key):

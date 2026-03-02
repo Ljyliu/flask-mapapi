@@ -6,6 +6,24 @@ from app import db
 from app.models import Customer
 import pandas as pd
 from io import StringIO, BytesIO
+from app import utils
+
+
+def get_customer_paginate(user_id,page=1, per_page=10):
+    """获取客户分页数据"""
+    pagination = Customer.query.filter_by(owner_id=user_id).paginate(page=page, 
+                                                                     per_page=per_page, 
+                                                                     error_out=False
+                                                                    )
+    return pagination
+
+
+
+def get_customer_data(user_id):
+    """获取当前登录用户的客户数据"""
+    customers = Customer.query.filter_by(owner_id=user_id).all()
+    return customers
+ 
 
 
 def validate_duplicate(name,phone,address,customer_id=None):
@@ -30,6 +48,124 @@ def validate_duplicate(name,phone,address,customer_id=None):
         if customer.first():
             errors.append('该客户已存在！手机号相同！')
     return errors
+
+
+
+def add_customer_data(name, phone, address, user_id):
+    """添加客户"""
+    if not name or not address:
+        raise ValueError("姓名和地址不能为空！")
+    if phone and not utils.validate_phone(phone):
+        raise ValueError("手机号格式不正确！")
+    
+    # 验证客户是否存在
+    duplicate_errors = validate_duplicate(name,phone,address)
+    if duplicate_errors:
+        raise ValueError(";".join(duplicate_errors))
+    customer = Customer(name=name, 
+                        phone=phone or None, 
+                        address=address,
+                        owner_id=user_id)
+    try:
+        db.session.add(customer)
+        geocode_customer(customer)
+        db.session.commit()
+        return True	
+    except Exception as e:
+        db.session.rollback()
+        raise e
+
+
+def edit_customer(customer_id,user_id):
+    """跳转至修改客户信息"""
+
+    customer = Customer.query.get(customer_id)
+    if not customer:
+        return None
+    if customer.owner_id != user_id:
+        return None
+
+    return customer
+
+
+def update_customer_data(customer_id, name, phone, address, user_id):
+    """修改客户信息"""
+    customer = edit_customer(customer_id,user_id)
+    if customer is None:
+        return None
+    # 验证客户是否存在
+    duplicate_errors = validate_duplicate(name,phone,address,customer_id)
+    if duplicate_errors:
+        raise ValueError(",".join(duplicate_errors))
+
+
+    # 验证手机号是否合法
+    if phone and not utils.validate_phone(phone):
+        raise ValueError("手机号格式错误！")
+
+        # 如果地址发生变化，重置地理编码状态
+    if customer.address != address:
+        customer.geocoded_status = None
+
+    # 更新客户信息
+    customer.name = name
+    customer.phone = phone
+    customer.address = address
+
+    try:
+        if customer.geocoded_status is None:
+            geocode_customer(customer,force=True)
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def delete_customer(customer_id,user_id):
+    """删除客户信息"""
+    customer = Customer.query.get(customer_id)
+    if not customer:
+        return False
+    if customer.owner_id != user_id:
+        return False
+    try:
+        db.session.delete(customer)
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+
+def search_customer(user_id,keyword=None):
+    """搜索客户
+        id存字典 避免重复查询数据库获取index
+    """
+    if not keyword:
+        return {
+            "customers_data": [],
+            "count": 0
+        }
+    else:
+        all_customers = Customer.query.filter(Customer.owner_id == user_id).order_by(Customer.id).all()
+        id_to_index = {}
+        for i, customer in enumerate(all_customers,start=1):
+            id_to_index[customer.id] = i
+
+        customers = Customer.query.filter((Customer.name.contains(keyword)) | 
+                                          (Customer.phone.contains(keyword)), 
+                                          Customer.owner_id == user_id).order_by(Customer.id).all()
+        customers_data = []
+        for customer in customers:
+            index = id_to_index[customer.id]
+            customers_data.append({
+                'index': index,
+                'customer': customer.to_dict(),
+            })
+        return {"customers_data": customers_data,
+                "count": len(customers)}
 
 
 # 调用高德地图 API
@@ -147,6 +283,35 @@ def geocode_customer(customer, force=False):
     return False
 
 
+def try_again_geocode(user_id):
+    """重试对失败的客户进行地理编码"""
+
+    to_retry = Customer.query.filter(
+        Customer.owner_id == user_id,
+        (Customer.geocoded_status.is_(None)) |
+        (Customer.geocoded_status == '已存在坐标') |
+        (Customer.geocoded_status == '未配置密钥') |
+        (Customer.geocoded_status.startswith('api错误')) |
+        (Customer.geocoded_status.startswith('请求失败'))
+    ).all()
+    
+    success_count = 0
+    for customer in to_retry:
+        try:
+            if geocode_customer(customer, force=True):
+                success_count += 1
+                db.session.commit()
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"重试客户 {customer.name} 时发生异常: {safe_str(e)}")
+    return {
+        "total": len(to_retry),
+        "success_count": success_count
+    }
+
+
+
 def read_excel_to_db(file, user_id):
     """
     读取Excel文件，并将客户数据保存到数据库中。
@@ -233,7 +398,7 @@ def read_excel_to_db(file, user_id):
         try:
             customer = Customer(
                 name=row['姓名'],
-                phone=row.get('手机号') or row.get('手机') or '', # 手机号列可以是“手机号”或“手机”，如果都没有则默认为空字符串
+                phone=row.get('手机号') or row.get('手机') or row.get('电话') or '', # 手机号列可以是“手机号”或“手机”，如果都没有则默认为空字符串
                 address=row['地址'], # 地址必须存在
                 owner_id=user_id,
             )
@@ -256,6 +421,77 @@ def read_excel_to_db(file, user_id):
         }
     }
 
+
+# 导出数据
+'''根据用户ID导出客户数据，支持CSV、XLSX和XLS格式
+ 当前实现说明：
+    - 查询当前用户的所有客户数据并构建DataFrame。
+    - 根据指定格式（CSV/XLSX/XLS）将数据写入内存缓冲区并返回。
+    - 优点：逻辑清晰，易于维护；支持多种常见文件格式。
+    - 缺点：
+        1. 数据量较大时可能导致内存溢出（如导出上万条记录）。
+        2. 不支持用户自定义筛选条件（如按时间范围或关键词过滤）。
+        3. 未对导出过程进行异步处理，可能影响性能。
+        4. 缺乏导出进度反馈机制，用户体验较差。
+
+    未来优化方向（适用于大数据量或复杂需求场景）：
+
+    1. 分页导出优化：
+        - 对大数据量采用分页查询方式，避免一次性加载所有数据到内存。
+        - 示例伪代码：
+            page = 1
+            per_page = 1000
+            while True:
+                customers = Customer.query.filter_by(owner_id=user_id).paginate(page=page, per_page=per_page)
+                if not customers.items:
+                    break
+                # 处理当前页数据
+                process_customers(customers.items)
+                page += 1
+
+    2. 流式响应支持：
+        - 使用流式写入技术（如生成器）逐步输出文件内容，降低内存占用。
+        - 示例伪代码：
+            def generate_csv_stream(customers):
+                yield "姓名,手机号,地址\\n"
+                for customer in customers:
+                    yield f"{customer.name},{customer.phone},{customer.address}\\n"
+
+            return StreamingResponse(generate_csv_stream(customers), media_type="text/csv")
+
+    3. 用户自定义筛选条件：
+        - 支持用户传入筛选参数（如起止日期、客户名称关键词等）。
+        - 示例伪代码：
+            filters = {
+                'start_date': '2023-01-01',
+                'end_date': '2023-12-31',
+                'keyword': '张三'
+            }
+            query = Customer.query.filter_by(owner_id=user_id)
+            if filters.get('start_date'):
+                query = query.filter(Customer.created_at >= filters['start_date'])
+            if filters.get('keyword'):
+                query = query.filter(Customer.name.contains(filters['keyword']))
+
+    4. 异步处理与性能优化：
+        - 结合FastAPI框架，使用异步数据库查询和文件写入提升性能。
+        - 示例伪代码：
+            async def async_output_excel(format, user_id):
+                customers = await db.execute(select(Customer).where(Customer.owner_id == user_id))
+                ...
+
+    5. 文件压缩与传输优化：
+        - 对大文件自动启用压缩（如ZIP格式），减少传输时间和存储空间。
+        - 示例伪代码：
+            import zipfile
+            with zipfile.ZipFile(output_zip, 'w') as zf:
+                zf.writestr("customers.csv", csv_content)
+    
+    适用场景：
+    - 当前实现适合数据量较小（几百条以内）且无需高级筛选功能的场景。
+    - 若需处理上千条数据或支持复杂筛选，建议采用上述优化方案。
+
+'''
 def output_excel(format,user_id):
     customers = Customer.query.filter_by(owner_id=user_id).all()
     data = []
