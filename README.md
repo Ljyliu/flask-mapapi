@@ -90,11 +90,11 @@ map_project/
 
 ## 界面预览
 电脑端
-![首页](screenshots/首页.JPG)
-![列表页](screenshots/列表页.JPG)
+![首页](screenshots/首页.jpg)
+![列表页](screenshots/列表页.jpg)
 移动端
-![移动端首页](screenshots/移动端首页.JPG)
-![移动端添加客户](screenshots/添加客户.JPG)
+![移动端首页](screenshots/移动端首页.jpg)
+![移动端添加客户](screenshots/添加客户.jpg)
 
 
 # 后续计划
